@@ -1968,6 +1968,25 @@ static void __mt_gpufreq_vsram_gpu_volt_switch(enum g_volt_switch_enum switch_wa
 }
 
 /*
+ * Vgpu request offset, in the same 10 uV unit the GPU OPP table uses
+ * (87500 == 875 mV). The mt6358 vgpu buck steps in 6.25 mV, so a smaller
+ * offset than -625 rounds straight back to the stock value and does nothing:
+ * -625 is the smallest offset that actually takes effect. 0 restores stock.
+ */
+#define MT6768_VGPU_UV_OFFSET	(-625)
+#define MT6768_VGPU_UV_FLOOR	(50000)
+
+static unsigned int mt6768_vgpu_cooler(unsigned int volt)
+{
+	int v = (int)volt + MT6768_VGPU_UV_OFFSET;
+
+	if (v < MT6768_VGPU_UV_FLOOR)
+		v = MT6768_VGPU_UV_FLOOR;
+
+	return (unsigned int)v;
+}
+
+/*
  * switch VGPU voltage via PMIC
  */
 static void __mt_gpufreq_vgpu_volt_switch(enum g_volt_switch_enum switch_way, unsigned int sfchg_rate,
@@ -1982,6 +2001,7 @@ static void __mt_gpufreq_vgpu_volt_switch(enum g_volt_switch_enum switch_way, un
 
 	steps = (max_diff / DELAY_FACTOR) + 1;
 
+	volt_new = mt6768_vgpu_cooler(volt_new);
 	regulator_set_voltage(g_pmic->reg_vgpu, volt_new * 10, VGPU_MAX_VOLT * 10 + 125);
 	udelay(steps * sfchg_rate + 52);
 

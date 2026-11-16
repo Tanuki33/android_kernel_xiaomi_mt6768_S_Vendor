@@ -932,8 +932,14 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto stop_kthread;
 	}
 
-	tunables->up_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
-	tunables->down_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
+	/*
+	 * MT6768: ramp the cluster up fast on a utilization increase and keep it
+	 * there for ~15 ms before allowing a drop. The inherited behaviour used
+	 * the same delay in both directions, which let the big cluster settle at
+	 * 850 MHz / 1.44 GHz and rarely reach 2 GHz during scroll-heavy workloads.
+	 */
+	tunables->up_rate_limit_us = 500;
+	tunables->down_rate_limit_us = 15000;
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;

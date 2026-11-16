@@ -27,6 +27,7 @@ obj-$(CONFIG_MACH_MT6785) += spm/
 obj-$(CONFIG_MACH_MT6785) += power_gs_v1/
 obj-$(CONFIG_MTK_STATIC_POWER) += leakage_table_v2/
 obj-$(CONFIG_MTK_CPU_FREQ) += cpufreq_v1/
+obj-$(CONFIG_MACH_MT6768) += mtk_cpufreq_screenoff.o
 obj-$(CONFIG_MACH_MT6739) += cpufreq_v2/
 ifneq ($(CONFIG_FPGA_EARLY_PORTING),y)
 obj-$(CONFIG_MTK_PTPOD) += eem_v2/

@@ -91,10 +91,32 @@ struct mt_cpu_dvfs cpu_dvfs[NR_MT_CPU_DVFS] = {
 	},
 };
 
+/*
+ * Vproc request offset for this platform, in the same 10 uV unit the
+ * OPP tables use (96250 == 962.5 mV). -2000 is -20 mV on every request of
+ * both clusters and of CCI; 0 restores the stock table bit for bit. Because
+ * this deliberately goes below the stock values, Vproc is additionally floored
+ * here so the PMIC stays inside its own minimum window.
+ */
+#define MT6768_VPROC_UV_OFFSET	(-2000)
+#define MT6768_VPROC_UV_FLOOR	(50000)
+
+static unsigned int mt6768_vproc_cooler(unsigned int volt)
+{
+	int v = (int)volt + MT6768_VPROC_UV_OFFSET;
+
+	if (v < MT6768_VPROC_UV_FLOOR)
+		v = MT6768_VPROC_UV_FLOOR;
+
+	return (unsigned int)v;
+}
+
 static int set_cur_volt_proc_cpu(struct buck_ctrl_t *buck_p,
 	unsigned int volt)
 {
 	unsigned int max_volt = MAX_VPROC_VOLT + 625;
+
+	volt = mt6768_vproc_cooler(volt);
 
 	if (buck_p->buck_id == CPU_DVFS_VPROC12)
 		return regulator_set_voltage(regulator_proc12, volt * 10,
