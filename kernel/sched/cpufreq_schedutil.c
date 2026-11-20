@@ -933,10 +933,11 @@ static int sugov_init(struct cpufreq_policy *policy)
 	}
 
 	/*
-	 * MT6768: ramp the cluster up fast on a utilization increase and keep it
-	 * there for ~15 ms before allowing a drop. The inherited behaviour used
-	 * the same delay in both directions, which let the big cluster settle at
-	 * 850 MHz / 1.44 GHz and rarely reach 2 GHz during scroll-heavy workloads.
+	 * MT6768: ramp up fast on a utilization increase and hold for a while
+	 * before allowing a drop. The inherited behaviour used the same delay in
+	 * both directions, which let the big cluster settle at 850 MHz / 1.44 GHz
+	 * and rarely reach 2 GHz during scroll-heavy work. These are the shared
+	 * defaults; sugov_start() splits them per cluster.
 	 */
 	tunables->up_rate_limit_us = 500;
 	tunables->down_rate_limit_us = 15000;
@@ -1002,6 +1003,25 @@ static int sugov_start(struct cpufreq_policy *policy)
 		sg_policy->tunables->up_rate_limit_us * NSEC_PER_USEC;
 	sg_policy->down_rate_delay_ns =
 		sg_policy->tunables->down_rate_limit_us * NSEC_PER_USEC;
+
+	/*
+	 * MT6768 does not set CPUFREQ_HAVE_GOVERNOR_PER_POLICY, so the tunables
+	 * struct is shared by both clusters - this per-policy shadow copy is the
+	 * only place the split can be applied. Different defaults on purpose:
+	 * under load the little cluster is already pegged at its top OPP, so
+	 * letting it fall back quickly mostly gives power back, while the big
+	 * cluster is the one that flaps between 850 MHz and 2 GHz from one frame
+	 * to the next and needs to hold its last OPP across a scroll gesture, but
+	 * holding it long after the load is gone only costs battery and heat - and
+	 * heat is what later forces the cluster down through thermal throttling.
+	 */
+	if (policy->cpuinfo.max_freq >= 1900000) {
+		sg_policy->up_rate_delay_ns = 500 * NSEC_PER_USEC;
+		sg_policy->down_rate_delay_ns = 10000 * NSEC_PER_USEC;
+	} else {
+		sg_policy->up_rate_delay_ns = 500 * NSEC_PER_USEC;
+		sg_policy->down_rate_delay_ns = 5000 * NSEC_PER_USEC;
+	}
 	update_min_rate_limit_ns(sg_policy);
 	sg_policy->last_freq_update_time	= 0;
 	sg_policy->next_freq			= 0;
