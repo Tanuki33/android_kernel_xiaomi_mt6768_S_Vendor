@@ -327,6 +327,50 @@ int user_min_free_kbytes = -1;
 int watermark_scale_factor = 125;
 
 /*
+ * Watermark boosting, backported from 5.0.
+ *
+ * watermark_scale_factor widens the min/low/high gap permanently, which costs
+ * free memory all the time. This is the complement: raise the watermarks only
+ * for a while after an allocation had to fall back due to external
+ * fragmentation. The allocation right after such an event is the one that ends
+ * up reclaiming synchronously inside a frame; boosting lets kswapd work ahead
+ * of it instead. The boost is dropped as soon as kswapd reaches the boosted
+ * high watermark (pgdat_balanced() in mm/vmscan.c).
+ *
+ * vm.watermark_boost_factor = 0 disables the mechanism at runtime.
+ */
+int watermark_boost_factor __read_mostly = 15000;
+
+static inline bool boost_watermark(struct zone *zone)
+{
+	unsigned long max_boost;
+
+	if (!watermark_boost_factor)
+		return false;
+
+	/*
+	 * Don't bother in zones that are unlikely to produce results. On small
+	 * machines, boosting the watermark can cause an out-of-memory situation
+	 * immediately.
+	 */
+	if ((pageblock_nr_pages * 4) > zone->managed_pages)
+		return false;
+
+	max_boost = mult_frac(zone->managed_pages, watermark_boost_factor, 10000);
+
+	/* Should not happen, but be conservative and disable boosting. */
+	if (!max_boost)
+		return false;
+
+	max_boost = max(pageblock_nr_pages, max_boost);
+
+	zone->watermark_boost = min(zone->watermark_boost + pageblock_nr_pages,
+				    max_boost);
+
+	return true;
+}
+
+/*
  * Extra memory for the system to try freeing. Used to temporarily
  * free memory, to make space for new workloads. Anyone can allocate
  * down to the min watermarks controlled by min_free_kbytes above.
@@ -3480,7 +3524,8 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 			}
 		}
 
-		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
+		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK] +
+			zone->watermark_boost;
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
 			int ret;
@@ -3802,8 +3847,16 @@ should_compact_retry(struct alloc_context *ac, int order, int alloc_flags,
 	 * so it doesn't really make much sense to retry except when the
 	 * failure could be caused by insufficient priority
 	 */
-	if (compaction_failed(compact_result))
+	if (compaction_failed(compact_result)) {
+		/*
+		 * The allocation fell back because of fragmentation rather than
+		 * because the zone holds too little free memory. Raise the
+		 * watermarks for a while so kswapd reclaims ahead of the next
+		 * allocation that needs a whole pageblock.
+		 */
+		boost_watermark(ac->preferred_zoneref->zone);
 		goto check_priority;
+	}
 
 	/*
 	 * make sure the compaction wasn't deferred or didn't bail out early

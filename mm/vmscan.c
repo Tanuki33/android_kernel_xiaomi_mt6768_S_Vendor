@@ -3393,9 +3393,15 @@ static bool pgdat_balanced(pg_data_t *pgdat, int order, int classzone_idx)
 		if (!managed_zone(zone))
 			continue;
 
-		mark = high_wmark_pages(zone);
-		if (zone_watermark_ok_safe(zone, order, mark, classzone_idx))
+		mark = high_wmark_pages(zone) + zone->watermark_boost;
+		if (zone_watermark_ok_safe(zone, order, mark, classzone_idx)) {
+			/*
+			 * The boosted watermark has been reached, so the point of the
+			 * boost is served: drop back to the real high watermark.
+			 */
+			zone->watermark_boost = 0;
 			return true;
+		}
 	}
 
 	/*

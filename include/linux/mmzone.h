@@ -373,6 +373,14 @@ struct zone {
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
 	unsigned long watermark[NR_WMARK];
 
+	/*
+	 * Temporary raise of the watermarks after an external fragmentation
+	 * event, dropped again once kswapd reaches the boosted high watermark.
+	 * Kept out of watermark[] so that setup_per_zone_wmarks() cannot bake it
+	 * in permanently. See boost_watermark() in mm/page_alloc.c.
+	 */
+	unsigned long watermark_boost;
+
 	unsigned long nr_reserved_highatomic;
 
 	/*
@@ -913,6 +921,9 @@ int min_free_kbytes_sysctl_handler(struct ctl_table *, int,
 					void *, size_t *, loff_t *);
 int watermark_scale_factor_sysctl_handler(struct ctl_table *, int,
 					void *, size_t *, loff_t *);
+/* How far (in 1/10000 of managed pages) an external fragmentation event may
+ * raise the zone watermarks; 0 disables watermark boosting entirely. */
+extern int watermark_boost_factor;
 extern int sysctl_lowmem_reserve_ratio[MAX_NR_ZONES];
 int lowmem_reserve_ratio_sysctl_handler(struct ctl_table *, int, void *,
 		size_t *, loff_t *);

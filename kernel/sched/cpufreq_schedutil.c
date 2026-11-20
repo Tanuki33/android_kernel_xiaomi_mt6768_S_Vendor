@@ -20,7 +20,14 @@
 struct sugov_tunables {
 	struct gov_attr_set	attr_set;
 	unsigned int		up_rate_limit_us;
-	unsigned int		down_rate_limit_us;
+	unsigned int	down_rate_limit_us;
+	/*
+	 * Ceiling for the I/O wakeup boost, in scheduler capacity units. Upstream
+	 * doubles the boost on every wakeup after I/O all the way to
+	 * SCHED_CAPACITY_SCALE, which pins the big cluster at its top OPP for any
+	 * launch or install on slow storage, whatever the utilization says.
+	 */
+	unsigned int		iowait_boost_limit;
 };
 
 struct sugov_policy {
@@ -403,6 +410,15 @@ static bool sugov_iowait_reset(struct sugov_cpu *sg_cpu, u64 time,
 	return true;
 }
 
+/* Ceiling the I/O boost may reach, clamped to a sane capacity range. */
+static unsigned int sugov_iowait_limit(struct sugov_cpu *sg_cpu)
+{
+	unsigned int limit = sg_cpu->sg_policy->tunables->iowait_boost_limit;
+
+	return limit ? min(limit, (unsigned int)SCHED_CAPACITY_SCALE) :
+		       SCHED_CAPACITY_SCALE;
+}
+
 /**
  * sugov_iowait_boost() - Updates the IO boost status of a CPU.
  * @sg_cpu: the sugov data for the CPU to boost
@@ -435,15 +451,17 @@ static void sugov_iowait_boost(struct sugov_cpu *sg_cpu, u64 time,
 		return;
 	sg_cpu->iowait_boost_pending = true;
 
-	/* Double the boost at each request */
+	/* Double the boost at each request, up to the configured ceiling */
 	if (sg_cpu->iowait_boost) {
 		sg_cpu->iowait_boost =
-			min_t(unsigned int, sg_cpu->iowait_boost << 1, SCHED_CAPACITY_SCALE);
+			min_t(unsigned int, sg_cpu->iowait_boost << 1,
+			      sugov_iowait_limit(sg_cpu));
 		return;
 	}
 
 	/* First wakeup after IO: start with minimum boost */
-	sg_cpu->iowait_boost = sg_cpu->min;
+	sg_cpu->iowait_boost = min_t(unsigned int, sg_cpu->min,
+				     sugov_iowait_limit(sg_cpu));
 }
 
 /**
@@ -766,9 +784,36 @@ static ssize_t down_rate_limit_us_store(struct gov_attr_set *attr_set,
 static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
 
+static ssize_t iowait_boost_limit_show(struct gov_attr_set *attr_set,
+				       char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->iowait_boost_limit);
+}
+
+static ssize_t iowait_boost_limit_store(struct gov_attr_set *attr_set,
+					const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned int limit;
+
+	if (kstrtouint(buf, 10, &limit))
+		return -EINVAL;
+	if (limit > SCHED_CAPACITY_SCALE)
+		return -EINVAL;
+
+	tunables->iowait_boost_limit = limit;
+
+	return count;
+}
+
+static struct governor_attr iowait_boost_limit = __ATTR_RW(iowait_boost_limit);
+
 static struct attribute *sugov_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
+	&iowait_boost_limit.attr,
 	NULL
 };
 
@@ -941,6 +986,14 @@ static int sugov_init(struct cpufreq_policy *policy)
 	 */
 	tunables->up_rate_limit_us = 500;
 	tunables->down_rate_limit_us = 15000;
+	/*
+	 * Half of SCHED_CAPACITY_SCALE: enough to open an app quickly after a
+	 * storage stall, without pinning the big cluster at 2 GHz for every
+	 * background sync. 1024 restores the upstream behaviour; 0 means the
+	 * same as 1024 (unlimited) so the knob cannot accidentally mute I/O
+	 * boosting entirely.
+	 */
+	tunables->iowait_boost_limit = 512;
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
