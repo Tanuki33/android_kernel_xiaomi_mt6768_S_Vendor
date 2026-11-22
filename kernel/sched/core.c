@@ -2471,7 +2471,14 @@ void scheduler_ipi(void)
 	 */
 	if (unlikely(got_nohz_idle_kick())) {
 		this_rq()->idle_balance = 1;
-		raise_softirq_irqoff(SCHED_SOFTIRQ);
+		/*
+		 * MT6768: the idle-balance kick arrives in IPI context, where waking
+		 * ksoftirqd just so it can run SCHED_SOFTIRQ on another CPU adds a
+		 * needless wakeup to the critical path. __ variants raise the softirq
+		 * for the current CPU only. Same change as the stable R vendor tree
+		 * (commit 8ab6c6750).
+		 */
+		__raise_softirq_irqoff(SCHED_SOFTIRQ);
 	}
 	irq_exit();
 }

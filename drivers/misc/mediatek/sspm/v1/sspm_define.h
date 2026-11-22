@@ -17,7 +17,13 @@
 #define SSPM_MPU_REGION_ID  9
 
 #define SSPM_PLT_SERV_SUPPORT       (1)
-#define SSPM_LOGGER_SUPPORT         (1)
+/*
+ * MT6768: off, as in the stable R vendor tree (commit 2443f1e7f). The SSPM
+ * logger reserves a shared buffer and hands it to the SPM MCU during init and
+ * resumes; nothing in Android userspace consumes it, and it adds an IPC round
+ * trip on the suspend path.
+ */
+#define SSPM_LOGGER_SUPPORT         (0)
 #define SSPM_LASTK_SUPPORT          (0)
 #define SSPM_COREDUMP_SUPPORT       (0)
 #define SSPM_EMI_PROTECTION_SUPPORT (1)

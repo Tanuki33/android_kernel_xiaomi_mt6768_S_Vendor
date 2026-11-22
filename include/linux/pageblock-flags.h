@@ -55,8 +55,16 @@ extern unsigned int pageblock_order;
 
 #else /* CONFIG_HUGETLB_PAGE */
 
-/* If huge pages are not used, group by MAX_ORDER_NR_PAGES */
-#define pageblock_order		(MAX_ORDER-1)
+/*
+ * MT6768: group by 8 pages (32 KB) instead of MAX_ORDER_NR_PAGES (4 MB),
+ * matching the stable R vendor tree (commit 64dd5ad12, "mm: Lower the
+ * non-hugetlbpage pageblock size to reduce scheduling delays"). Every
+ * pageblock walk - compaction, migration, isolation, unmmovable-page scans -
+ * is O(pageblock_nr_pages), so 4 MB blocks mean 1024 page tests where 8 are
+ * enough. This config has no hugetlb, so the else branch here is the one the
+ * MT6768 build compiles.
+ */
+#define pageblock_order		PAGE_ALLOC_COSTLY_ORDER
 
 #endif /* CONFIG_HUGETLB_PAGE */
 

@@ -320,11 +320,12 @@ compound_page_dtor * const compound_page_dtors[] = {
 int min_free_kbytes = 1024;
 int user_min_free_kbytes = -1;
 /*
- * Keep a larger reserve proportional to memory, so kswapd frees pages before
- * an allocation has to reclaim synchronously. The stock 10 (= 0.1%) leaves
- * allocation stalls in the middle of UI frames; 125 keeps ~1.25%.
+ * Left at the stock value. It was raised to 125 (= 1.25%) to give kswapd a
+ * bigger margin, but that keeps a permanently larger reserve on a 3.7 GB
+ * device and the stable R vendor tree runs 10 without trouble; watermark
+ * boosting below covers the fragmentation case without the standing cost.
  */
-int watermark_scale_factor = 125;
+int watermark_scale_factor = 10;
 
 /*
  * Watermark boosting, backported from 5.0.

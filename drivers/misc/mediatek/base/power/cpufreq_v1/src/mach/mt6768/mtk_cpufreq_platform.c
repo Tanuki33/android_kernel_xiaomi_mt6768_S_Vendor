@@ -93,12 +93,14 @@ struct mt_cpu_dvfs cpu_dvfs[NR_MT_CPU_DVFS] = {
 
 /*
  * Vproc request offset for this platform, in the same 10 uV unit the
- * OPP tables use (96250 == 962.5 mV). -2000 is -20 mV on every request of
- * both clusters and of CCI; 0 restores the stock table bit for bit. Because
- * this deliberately goes below the stock values, Vproc is additionally floored
- * here so the PMIC stays inside its own minimum window.
+ * OPP tables use (96250 == 962.5 mV). Set to 0: the -2000 (-20 mV) build was
+ * not stable - the phone stopped dead during ordinary idle work, with no oops
+ * and no suspend involved, which is what marginal silicon at reduced voltage
+ * looks like. The stable R vendor tree ships the stock table with no offset.
+ * The floor is kept so a future experiment can never request a voltage
+ * outside the PMIC's own minimum window.
  */
-#define MT6768_VPROC_UV_OFFSET	(-2000)
+#define MT6768_VPROC_UV_OFFSET	(0)
 #define MT6768_VPROC_UV_FLOOR	(50000)
 
 static unsigned int mt6768_vproc_cooler(unsigned int volt)

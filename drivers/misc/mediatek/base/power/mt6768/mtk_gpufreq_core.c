@@ -1969,11 +1969,12 @@ static void __mt_gpufreq_vsram_gpu_volt_switch(enum g_volt_switch_enum switch_wa
 
 /*
  * Vgpu request offset, in the same 10 uV unit the GPU OPP table uses
- * (87500 == 875 mV). The mt6358 vgpu buck steps in 6.25 mV, so a smaller
- * offset than -625 rounds straight back to the stock value and does nothing:
- * -625 is the smallest offset that actually takes effect. 0 restores stock.
+ * (87500 == 875 mV). Set to 0 together with Vproc: the undervolted build was
+ * not stable, and the stable R vendor tree runs the stock table. The mt6358
+ * vgpu buck steps in 6.25 mV, so -625 was the smallest offset that took effect
+ * at all; any future retry has to start from 0 and go one step at a time.
  */
-#define MT6768_VGPU_UV_OFFSET	(-625)
+#define MT6768_VGPU_UV_OFFSET	(0)
 #define MT6768_VGPU_UV_FLOOR	(50000)
 
 static unsigned int mt6768_vgpu_cooler(unsigned int volt)

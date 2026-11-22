@@ -46,9 +46,15 @@ unsigned int normalized_sysctl_sched_latency		= 6000000ULL;
 unsigned int sysctl_sched_sync_hint_enable = 1;
 
 /*
- * Enable/disable using cstate knowledge in idle sibling selection
+ * Enable/disable using cstate knowledge in idle sibling selection.
+ *
+ * MT6768: off by default, as in the stable R vendor tree (commit
+ * 115f9a5a8). The cstate check makes find_best_target() refuse a shallow-idle
+ * big CPU in favour of a deeper-idle one, which on this SoC costs wake latency
+ * more often than it saves power. Left writable (0644) so it can still be
+ * flipped at runtime to A/B the behaviour.
  */
-unsigned int sysctl_sched_cstate_aware = 1;
+unsigned int sysctl_sched_cstate_aware = 0;
 
 /*
  * The initial- and re-scaling of tunables is configurable
