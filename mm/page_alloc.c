@@ -365,7 +365,17 @@ static inline bool boost_watermark(struct zone *zone)
 
 	max_boost = max(pageblock_nr_pages, max_boost);
 
-	zone->watermark_boost = min(zone->watermark_boost + pageblock_nr_pages,
+	/*
+	 * Upstream boosts by one pageblock per failed attempt, which only means
+	 * a 4 MB step because pageblock_order is MAX_ORDER - 1 there. This
+	 * kernel sets pageblock_order to PAGE_ALLOC_COSTLY_ORDER (32 KB), so a
+	 * pageblock-sized step would need ~1700 compaction failures to walk a
+	 * 55 MB boost ceiling on a 3.7 GB device, and the boost never lands.
+	 * Step by one MAX_ORDER block instead, so the boost still tracks how
+	 * deep the fragmentation is rather than how small the isolation unit
+	 * happens to be.
+	 */
+	zone->watermark_boost = min(zone->watermark_boost + MAX_ORDER_NR_PAGES,
 				    max_boost);
 
 	return true;
