@@ -991,13 +991,24 @@ static int sugov_init(struct cpufreq_policy *policy)
 	}
 
 	/*
-	 * Match the stable R vendor tree: derive both limits from the policy's own
-	 * transition latency instead of hardcoding MT6768 numbers. The hardcoded
-	 * 500 us / 15000 us pair was an experiment that never proved itself, and it
-	 * drifted from what the platform actually costs to switch frequency.
+	 * Match the stable R vendor tree: derive the ramp-up limit from the
+	 * policy's own transition latency instead of hardcoding MT6768 numbers.
+	 * The hardcoded 500 us / 15000 us pair was an experiment that never
+	 * proved itself, and it drifted from what the platform actually costs to
+	 * switch frequency.
+	 *
+	 * Keep a floor on the way down. MT6768 declares a 1 us transition
+	 * latency, so both limits come out at 1 us and the governor gives the
+	 * frequency back the moment a burst ends. A UI burst ends between two
+	 * frames, so the next frame starts from the bottom of the OPP table
+	 * again. Holding the burst frequency for 2 ms keeps it across that gap:
+	 * lower latency, and fewer up/down/up cycles per frame, each of which is
+	 * a PPM request plus a regulator change rather than a free operation.
+	 * Writable at runtime through down_rate_limit_us sysfs.
 	 */
 	tunables->up_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
-	tunables->down_rate_limit_us = cpufreq_policy_transition_delay_us(policy);
+	tunables->down_rate_limit_us = max(2000U,
+					   cpufreq_policy_transition_delay_us(policy));
 	/*
 	 * Half of SCHED_CAPACITY_SCALE: enough to open an app quickly after a
 	 * storage stall, without pinning the big cluster at 2 GHz for every
